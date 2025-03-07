@@ -12,6 +12,7 @@ A simple GUI application that converts MT940 bank statement files (.sta) to CSV 
   - Currency
   - Bank Reference
   - Description
+- Available for macOS and Linux
 
 ## Requirements
 
@@ -36,7 +37,9 @@ A simple GUI application that converts MT940 bank statement files (.sta) to CSV 
    python mt940_converter.py
    ```
 
-### Building macOS Application Bundle
+### Building Application Bundle
+
+#### macOS
 
 1. Install the required packages:
    ```bash
@@ -49,6 +52,27 @@ A simple GUI application that converts MT940 bank statement files (.sta) to CSV 
 3. The application bundle will be created in the `dist` folder as `MT940_Converter_Mac.zip`
 4. Extract the zip file and move the application to your Applications folder
 5. Double-click to run the application
+
+#### Linux
+
+1. Install the required packages:
+   ```bash
+   pip install -r requirements.txt
+   ```
+2. Run the build script:
+   ```bash
+   ./build_linux.sh
+   ```
+3. The executable will be created in the `dist` folder as `MT940_Converter_Linux.zip`
+4. Extract the zip file
+5. Make the executable runnable:
+   ```bash
+   chmod +x mt940_converter
+   ```
+6. Run the application:
+   ```bash
+   ./mt940_converter
+   ```
 
 ## Usage
 
@@ -78,7 +102,13 @@ The CSV file will contain the following columns:
 The application can be built into a standalone bundle using PyInstaller. The build process includes:
 1. Creating an application icon
 2. Bundling all dependencies
-3. Creating a macOS application bundle
+3. Creating a platform-specific executable/bundle
 4. Packaging the application into a zip file
 
-The resulting application bundle will be a native macOS application that can be run without Python installed 
+The resulting application will be a native executable that can be run without Python installed.
+
+## Platform Support
+
+- macOS: Native .app bundle
+- Linux: Native executable
+- Windows: Coming soon 
