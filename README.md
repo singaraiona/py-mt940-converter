@@ -14,62 +14,118 @@ A simple GUI application that converts MT940 bank statement files (.sta) to CSV 
   - Description
 - Available for macOS and Linux
 
-## Requirements
+## System Requirements
 
+### Linux
 - Python 3.6 or higher
-- Required packages:
-  - pandas
-  - tkinter (usually comes with Python)
-  - pyinstaller (for building the application)
-  - pillow (for icon creation)
+- tkinter (python3-tk)
+- pip3
+- zip (for packaging)
+
+### macOS
+- Python 3.6 or higher
+- tkinter (python-tk)
+- pip3
+- Homebrew (for installing dependencies)
+- zip (for packaging)
+
+## Python Requirements
+- pandas
+- pyinstaller (for building the application)
+- pillow (for icon creation)
 
 ## Installation
 
 ### Running from Source
 
 1. Clone or download this repository
-2. Install the required packages:
+2. Install system dependencies:
+   - Linux:
+     ```bash
+     # Debian/Ubuntu
+     sudo apt-get install python3-tk
+     
+     # Fedora
+     sudo dnf install python3-tkinter
+     
+     # Arch Linux
+     sudo pacman -S tk
+     
+     # openSUSE
+     sudo zypper install python3-tk
+     ```
+   - macOS:
+     ```bash
+     # Install Homebrew if not installed
+     /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+     
+     # Install Python and tkinter
+     brew install python3 python-tk
+     ```
+3. Install Python requirements:
    ```bash
-   pip install -r requirements.txt
+   pip3 install -r requirements.txt
    ```
-3. Run the application:
+4. Run the application:
    ```bash
-   python mt940_converter.py
+   python3 mt940_converter.py
    ```
 
 ### Building Application Bundle
 
 #### macOS
 
-1. Install the required packages:
+1. Install system dependencies:
    ```bash
-   pip install -r requirements.txt
+   # Install Homebrew if not installed
+   /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+   
+   # Install Python and tkinter
+   brew install python3 python-tk
    ```
-2. Run the build script:
+2. Install Python requirements:
+   ```bash
+   pip3 install -r requirements.txt
+   ```
+3. Run the build script:
    ```bash
    ./build_mac.sh
    ```
-3. The application bundle will be created in the `dist` folder as `MT940_Converter_Mac.zip`
-4. Extract the zip file and move the application to your Applications folder
-5. Double-click to run the application
+4. The application bundle will be created in the `dist` folder as `MT940_Converter_Mac.zip`
+5. Extract the zip file and move the application to your Applications folder
+6. Double-click to run the application
 
 #### Linux
 
-1. Install the required packages:
+1. Install system dependencies:
    ```bash
-   pip install -r requirements.txt
+   # Debian/Ubuntu
+   sudo apt-get install python3-tk
+   
+   # Fedora
+   sudo dnf install python3-tkinter
+   
+   # Arch Linux
+   sudo pacman -S tk
+   
+   # openSUSE
+   sudo zypper install python3-tk
    ```
-2. Run the build script:
+2. Install Python requirements:
+   ```bash
+   pip3 install -r requirements.txt
+   ```
+3. Run the build script:
    ```bash
    ./build_linux.sh
    ```
-3. The executable will be created in the `dist` folder as `MT940_Converter_Linux.zip`
-4. Extract the zip file
-5. Make the executable runnable:
+4. The executable will be created in the `dist` folder as `MT940_Converter_Linux.zip`
+5. Extract the zip file
+6. Make the executable runnable:
    ```bash
    chmod +x mt940_converter
    ```
-6. Run the application:
+7. Run the application:
    ```bash
    ./mt940_converter
    ```
@@ -100,10 +156,11 @@ The CSV file will contain the following columns:
 ## Building from Source
 
 The application can be built into a standalone bundle using PyInstaller. The build process includes:
-1. Creating an application icon
-2. Bundling all dependencies
-3. Creating a platform-specific executable/bundle
-4. Packaging the application into a zip file
+1. Checking and installing system dependencies
+2. Creating an application icon
+3. Bundling all dependencies
+4. Creating a platform-specific executable/bundle
+5. Packaging the application into a zip file
 
 The resulting application will be a native executable that can be run without Python installed.
 
