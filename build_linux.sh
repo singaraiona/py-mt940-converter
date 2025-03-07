@@ -56,14 +56,16 @@ echo "Building application..."
 pyinstaller --name "MT940_Converter" \
             --windowed \
             --add-data "README.md:." \
-            --icon "icon.png" \
             --clean \
             --noconfirm \
             mt940_converter.py
 
 # Create a more user-friendly executable
 cd dist
-mv "MT940_Converter" "mt940_converter"
+rm -rf mt940_converter
+mkdir -p mt940_converter
+cp -r MT940_Converter/* mt940_converter/
+cp MT940_Converter mt940_converter/mt940_converter
 
 # Create a zip file
 zip -r "MT940_Converter_Linux.zip" "mt940_converter"
