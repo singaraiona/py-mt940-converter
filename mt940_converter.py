@@ -9,8 +9,8 @@ import re
 class MT940Converter:
     def __init__(self, root):
         self.root = root
-        self.root.title("MT940 to CSV Converter")
-        self.root.geometry("600x400")
+        self.root.title("MT940 Statement Viewer")
+        self.root.geometry("1000x600")
         
         # Initialize file path
         self.loaded_file_path = None
@@ -25,7 +25,7 @@ class MT940Converter:
         # Title - using system font
         title_label = tk.Label(
             main_frame,
-            text="MT940 to CSV Converter",
+            text="MT940 Statement Viewer",
             font=('system', 16, 'bold'),
             bg='#f0f0f0'
         )
@@ -33,13 +33,12 @@ class MT940Converter:
         
         # Instructions
         instructions = """
-        This tool converts MT940 bank statement files (.sta) to CSV format.
+        This tool displays MT940 bank statement files (.sta) in a table format.
         
         Steps:
         1. Click 'Load File' to choose your .sta file
-        2. Click 'Convert' to create the CSV file
-        3. The output CSV will be created in the same folder
-        4. The CSV will contain: Date, Amount, Currency, Bank Reference, and Description
+        2. Click 'Show' to display the transactions
+        3. Use the table below to view and analyze your transactions
         """
         
         instructions_label = tk.Label(
@@ -68,13 +67,27 @@ class MT940Converter:
         )
         self.load_button.pack(side='left', padx=10)
         
+        # Show button (initially disabled)
+        self.show_button = tk.Button(
+            button_frame,
+            text="Show Transactions",
+            command=self.show_transactions,
+            font=('system', 12),
+            bg='#2196F3',
+            fg='white',
+            padx=20,
+            pady=10,
+            state='disabled'
+        )
+        self.show_button.pack(side='left', padx=10)
+
         # Convert button (initially disabled)
         self.convert_button = tk.Button(
             button_frame,
             text="Convert to CSV",
             command=self.convert_file,
             font=('system', 12),
-            bg='#2196F3',
+            bg='#FF9800',
             fg='white',
             padx=20,
             pady=10,
@@ -101,10 +114,63 @@ class MT940Converter:
         )
         self.progress_bar.pack(fill='x', pady=10)
         
+        # Create Treeview for transactions
+        self.tree_frame = tk.Frame(main_frame)
+        self.tree_frame.pack(expand=True, fill='both')
+        
+        # Create scrollbars
+        y_scrollbar = ttk.Scrollbar(self.tree_frame)
+        y_scrollbar.pack(side='right', fill='y')
+        
+        x_scrollbar = ttk.Scrollbar(self.tree_frame, orient='horizontal')
+        x_scrollbar.pack(side='bottom', fill='x')
+        
+        # Create Treeview
+        self.tree = ttk.Treeview(
+            self.tree_frame,
+            columns=('Date', 'Amount', 'Currency', 'Bank Reference', 'Description'),
+            show='headings',
+            yscrollcommand=y_scrollbar.set,
+            xscrollcommand=x_scrollbar.set
+        )
+        
+        # Configure scrollbars
+        y_scrollbar.config(command=self.tree.yview)
+        x_scrollbar.config(command=self.tree.xview)
+        
+        # Configure column headings
+        self.tree.heading('Date', text='Date')
+        self.tree.heading('Amount', text='Amount')
+        self.tree.heading('Currency', text='Currency')
+        self.tree.heading('Bank Reference', text='Bank Reference')
+        self.tree.heading('Description', text='Description')
+        
+        # Configure column widths
+        self.tree.column('Date', width=100)
+        self.tree.column('Amount', width=100)
+        self.tree.column('Currency', width=80)
+        self.tree.column('Bank Reference', width=150)
+        self.tree.column('Description', width=400)
+        
+        self.tree.pack(expand=True, fill='both')
+        
+        # Summary frame
+        self.summary_frame = tk.Frame(main_frame, bg='#f0f0f0')
+        self.summary_frame.pack(fill='x', pady=10)
+        
+        # Summary labels
+        self.total_label = tk.Label(
+            self.summary_frame,
+            text="",
+            font=('system', 10, 'bold'),
+            bg='#f0f0f0'
+        )
+        self.total_label.pack(side='left', padx=10)
+        
         # Version info
         version_label = tk.Label(
             main_frame,
-            text="Version 1.2",
+            text="Version 2.0",
             font=('system', 8),
             bg='#f0f0f0'
         )
@@ -116,8 +182,6 @@ class MT940Converter:
             self.status_label.configure(text=message)
             self.progress_var.set(progress)
             self.root.update_idletasks()
-            
-            # Give time for UI to process updates
             self.root.after(10)
             self.root.update()
         except Exception as e:
@@ -133,6 +197,8 @@ class MT940Converter:
             try:
                 # Reset UI state
                 self.update_ui("", 0)
+                self.tree.delete(*self.tree.get_children())
+                self.total_label.config(text="")
                 
                 # Verify file exists and is readable
                 if not os.path.exists(file_path):
@@ -142,17 +208,19 @@ class MT940Converter:
                 self.loaded_file_path = file_path
                 self.update_ui(f"File loaded: {os.path.basename(file_path)}", 25)
                 
-                # Force enable convert button
+                # Enable both buttons
+                self.show_button.configure(state='normal')
                 self.convert_button.configure(state='normal')
                 self.root.update_idletasks()
                 
             except Exception as e:
                 self.update_ui(f"Error loading file: {str(e)}", 0)
                 messagebox.showerror("Error", f"Failed to load file: {str(e)}")
+                self.show_button.configure(state='disabled')
                 self.convert_button.configure(state='disabled')
                 self.loaded_file_path = None
 
-    def convert_file(self):
+    def show_transactions(self):
         if not self.loaded_file_path:
             messagebox.showerror("Error", "Please load a file first")
             return
@@ -160,7 +228,64 @@ class MT940Converter:
         try:
             self.update_ui("Reading file...", 10)
             
-            # Convert the file
+            # Clear existing items
+            self.tree.delete(*self.tree.get_children())
+            
+            # Parse the file
+            transactions = self.parse_mt940(self.loaded_file_path)
+            
+            self.update_ui("Displaying transactions...", 75)
+            
+            # Add transactions to treeview
+            total_amount = 0
+            currency = None
+            
+            for trans in transactions:
+                # Format date
+                date_str = trans['Date'].strftime('%Y-%m-%d')
+                
+                # Format amount
+                amount = round(trans['Amount'], 2)
+                total_amount += amount
+                
+                # Get currency
+                if not currency:
+                    currency = trans['Currency']
+                
+                # Insert into treeview
+                self.tree.insert('', 'end', values=(
+                    date_str,
+                    f"{amount:,.2f}",
+                    trans['Currency'],
+                    trans['Bank Reference'],
+                    trans['Description']
+                ))
+            
+            # Update summary
+            self.total_label.config(
+                text=f"Total Transactions: {len(transactions)} | Total Amount: {total_amount:,.2f} {currency}"
+            )
+            
+            self.update_ui(
+                f"Successfully displayed {len(transactions)} transactions.",
+                100
+            )
+            
+        except Exception as e:
+            self.update_ui(f"Error: {str(e)}", 0)
+            messagebox.showerror("Error", f"Failed to display transactions: {str(e)}")
+            self.show_button.config(state='disabled')
+
+    def convert_file(self):
+        """Convert the loaded file to CSV"""
+        if not self.loaded_file_path:
+            messagebox.showerror("Error", "Please load a file first")
+            return
+            
+        try:
+            self.update_ui("Reading file...", 10)
+            
+            # Parse the file
             transactions = self.parse_mt940(self.loaded_file_path)
             
             self.update_ui("Creating CSV file...", 75)
@@ -178,16 +303,11 @@ class MT940Converter:
                 f"Success! Converted {len(transactions)} transactions.\nOutput saved to: {os.path.basename(output_path)}",
                 100
             )
-            messagebox.showinfo("Success", "File converted successfully!")
-            
-            # Reset state
-            self.loaded_file_path = None
-            self.convert_button.config(state='disabled')
+            messagebox.showinfo("Success", f"File converted successfully!\nSaved to: {os.path.basename(output_path)}")
             
         except Exception as e:
             self.update_ui(f"Error: {str(e)}", 0)
             messagebox.showerror("Error", f"Failed to convert file: {str(e)}")
-            self.convert_button.config(state='disabled')
 
     def extract_currency(self, line):
         """Extract currency from balance field"""
