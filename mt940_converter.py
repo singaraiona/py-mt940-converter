@@ -4,6 +4,7 @@ from tkinter import filedialog, messagebox
 import pandas as pd
 from datetime import datetime
 import os
+import re
 
 class MT940Converter:
     def __init__(self, root):
@@ -21,11 +22,11 @@ class MT940Converter:
         main_frame = tk.Frame(root, bg='#f0f0f0', padx=20, pady=20)
         main_frame.pack(expand=True, fill='both')
         
-        # Title
+        # Title - using system font
         title_label = tk.Label(
             main_frame,
             text="MT940 to CSV Converter",
-            font=('Helvetica', 16, 'bold'),
+            font=('system', 16, 'bold'),
             bg='#f0f0f0'
         )
         title_label.pack(pady=(0, 20))
@@ -44,7 +45,7 @@ class MT940Converter:
         instructions_label = tk.Label(
             main_frame,
             text=instructions,
-            font=('Helvetica', 10),
+            font=('system', 10),
             bg='#f0f0f0',
             justify='left'
         )
@@ -59,7 +60,7 @@ class MT940Converter:
             button_frame,
             text="Load .sta File",
             command=self.load_file,
-            font=('Helvetica', 12),
+            font=('system', 12),
             bg='#4CAF50',
             fg='white',
             padx=20,
@@ -72,7 +73,7 @@ class MT940Converter:
             button_frame,
             text="Convert to CSV",
             command=self.convert_file,
-            font=('Helvetica', 12),
+            font=('system', 12),
             bg='#2196F3',
             fg='white',
             padx=20,
@@ -85,7 +86,7 @@ class MT940Converter:
         self.status_label = tk.Label(
             main_frame,
             text="",
-            font=('Helvetica', 10),
+            font=('system', 10),
             bg='#f0f0f0',
             wraplength=500
         )
@@ -103,11 +104,18 @@ class MT940Converter:
         # Version info
         version_label = tk.Label(
             main_frame,
-            text="Version 1.0",
-            font=('Helvetica', 8),
+            text="Version 1.2",
+            font=('system', 8),
             bg='#f0f0f0'
         )
         version_label.pack(side='bottom', pady=(20, 0))
+
+    def update_ui(self, message, progress):
+        """Helper method to update UI and ensure updates are processed"""
+        self.status_label.config(text=message)
+        self.progress_var.set(progress)
+        self.root.update_idletasks()
+        self.root.update()
 
     def load_file(self):
         file_path = filedialog.askopenfilename(
@@ -117,15 +125,12 @@ class MT940Converter:
         
         if file_path:
             # Reset UI state
-            self.progress_var.set(0)
-            self.status_label.config(text="")
-            self.root.update()
+            self.update_ui("", 0)
             
             # Set new file and update UI
             self.loaded_file_path = file_path
-            self.status_label.config(text=f"File loaded: {os.path.basename(file_path)}")
+            self.update_ui(f"File loaded: {os.path.basename(file_path)}", 25)
             self.convert_button.config(state='normal')
-            self.progress_var.set(25)  # Show some progress to indicate file is loaded
 
     def convert_file(self):
         if not self.loaded_file_path:
@@ -133,25 +138,25 @@ class MT940Converter:
             return
             
         try:
-            self.status_label.config(text="Converting file...")
-            self.progress_var.set(50)
-            self.root.update()
+            self.update_ui("Reading file...", 10)
             
             # Convert the file
             transactions = self.parse_mt940(self.loaded_file_path)
+            
+            self.update_ui("Creating CSV file...", 75)
             
             # Create output filename
             output_path = os.path.splitext(self.loaded_file_path)[0] + '.csv'
             
             # Convert to DataFrame and save
             df = pd.DataFrame(transactions)
-            df['Date'] = df['Date'].dt.strftime('%Y-%m-%d')
-            df['Amount'] = df['Amount'].round(2)
+            df['Date'] = pd.to_datetime(df['Date']).dt.strftime('%Y-%m-%d')
+            df['Amount'] = pd.to_numeric(df['Amount']).round(2)
             df.to_csv(output_path, index=False)
             
-            self.progress_var.set(100)
-            self.status_label.config(
-                text=f"Success! Converted {len(transactions)} transactions.\nOutput saved to: {os.path.basename(output_path)}"
+            self.update_ui(
+                f"Success! Converted {len(transactions)} transactions.\nOutput saved to: {os.path.basename(output_path)}",
+                100
             )
             messagebox.showinfo("Success", "File converted successfully!")
             
@@ -160,97 +165,158 @@ class MT940Converter:
             self.convert_button.config(state='disabled')
             
         except Exception as e:
-            self.status_label.config(text=f"Error: {str(e)}")
+            self.update_ui(f"Error: {str(e)}", 0)
             messagebox.showerror("Error", f"Failed to convert file: {str(e)}")
-            self.progress_var.set(0)
             self.convert_button.config(state='disabled')
 
-    def clean_description(self, desc):
-        desc = desc.replace('<', ' ').replace('>', ' ')
-        desc = ' '.join(desc.split())
-        return desc
+    def extract_currency(self, line):
+        """Extract currency from balance field"""
+        try:
+            # Find the currency code using regex
+            # Currency codes are always 3 uppercase letters
+            match = re.search(r'[DC](\d{6})([A-Z]{3})', line)
+            if match:
+                return match.group(2)
+        except Exception as e:
+            print(f"Warning: Error extracting currency from '{line}': {str(e)}")
+        return None
 
     def parse_amount(self, amount_str):
+        """Parse amount from MT940 transaction line"""
         try:
-            parts = amount_str.split('N')
-            if len(parts) < 2:
+            # First, find the debit/credit indicator and amount
+            debit = 'D' in amount_str
+            credit = 'C' in amount_str
+            
+            if not (debit or credit):
                 return 0.0
-            amount_part = parts[1].split('N')[0]
-            amount_part = amount_part.replace(',', '.')
-            return float(amount_part)
-        except (ValueError, IndexError):
-            print(f"Error parsing amount: {amount_str}")
+                
+            # Extract the numeric part using regex
+            # Look for amount after D or C indicator, followed by N or F
+            amount_match = re.search(r'[DC]N?(\d+,\d*|\d*\.\d*|\d+)', amount_str)
+            if not amount_match:
+                # Try alternative format where amount comes after reference
+                amount_match = re.search(r'NONREF//.*?(\d+,\d*|\d*\.\d*|\d+)', amount_str)
+            
+            if amount_match:
+                amount_str = amount_match.group(1)
+                # Convert to float, handling both comma and dot as decimal separator
+                amount = float(amount_str.replace(',', '.'))
+                # Apply sign based on debit/credit
+                if debit:
+                    amount = -amount  # Debit (outgoing) is negative
+                else:
+                    amount = amount  # Credit (incoming) is positive
+                return amount
+                
+            return 0.0
+            
+        except Exception as e:
+            print(f"Warning: Error parsing amount from '{amount_str}': {str(e)}")
             return 0.0
 
     def parse_mt940(self, file_path):
+        """Optimized MT940 parsing"""
         transactions = []
-        
-        with open(file_path, 'r', encoding='iso-8859-1') as file:
-            lines = file.readlines()
-            
         current_transaction = None
-        for i, line in enumerate(lines):
-            line = line.strip()
-            if line.startswith(':61:'):
-                parts = line[4:].split('N')
-                date_str = parts[0][:6]
+        description = []
+        currency = None
+        
+        # Pre-compile transaction markers
+        transaction_start = ':61:'
+        currency_markers = [':60F:', ':60M:', ':62F:', ':62M:']  # Various balance fields that contain currency
+        description_start = ':86:'
+        desc_markers = {'<00', '<20', '<21', '<22', '<23', '<27', '<28', '<29'}
+        
+        try:
+            with open(file_path, 'r', encoding='iso-8859-1') as file:
+                lines = file.readlines()
                 
-                amount_str = line[4:]
+            total_lines = len(lines)
+            for i, line in enumerate(lines):
+                # Update progress every 100 lines
+                if i % 100 == 0:
+                    self.update_ui(f"Processing line {i}/{total_lines}...", 10 + (i/total_lines * 65))
                 
-                if 'D' in amount_str:
-                    amount = self.parse_amount(amount_str)
-                elif 'C' in amount_str:
-                    amount = -self.parse_amount(amount_str)
-                else:
+                line = line.strip()
+                if not line:
                     continue
                 
-                date = datetime.strptime(date_str, '%y%m%d')
-                
-                description = []
-                j = i + 1
-                while j < len(lines):
-                    next_line = lines[j].strip()
-                    if not next_line or next_line.startswith(':61:'):
-                        break
-                    if next_line.startswith(':86:'):
-                        j += 1
-                        while j < len(lines):
-                            desc_line = lines[j].strip()
-                            if not desc_line or desc_line.startswith(':61:'):
+                # Extract currency from balance fields
+                if not currency:  # Only try to find currency if we haven't found it yet
+                    for marker in currency_markers:
+                        if line.startswith(marker):
+                            found_currency = self.extract_currency(line)
+                            if found_currency:
+                                currency = found_currency
                                 break
-                            if desc_line.startswith('<'):
-                                if desc_line.startswith('<00'):
-                                    description.append(desc_line[3:])
-                                elif desc_line.startswith('<20'):
-                                    description.append(desc_line[3:])
-                                elif desc_line.startswith('<21'):
-                                    description.append(desc_line[3:])
-                                elif desc_line.startswith('<22'):
-                                    description.append(desc_line[3:])
-                                elif desc_line.startswith('<23'):
-                                    description.append(desc_line[3:])
-                                elif desc_line.startswith('<27'):
-                                    description.append(desc_line[3:])
-                                elif desc_line.startswith('<28'):
-                                    description.append(desc_line[3:])
-                                elif desc_line.startswith('<29'):
-                                    description.append(desc_line[3:])
-                            j += 1
-                        break
-                    else:
-                        description.append(next_line)
-                    j += 1
                 
-                current_transaction = {
-                    'Date': date,
-                    'Amount': amount,
-                    'Currency': 'PLN',
-                    'Bank Reference': parts[0].split('//')[-1] if '//' in parts[0] else '',
-                    'Description': self.clean_description(' '.join(description))
-                }
+                if line.startswith(transaction_start):
+                    if current_transaction:
+                        current_transaction['Description'] = ' '.join(description)
+                        transactions.append(current_transaction)
+                        description = []
+                    
+                    # Parse transaction header
+                    try:
+                        # Extract date and reference
+                        date_str = line[4:10]  # Date is always 6 characters after :61:
+                        
+                        # Parse amount and type (D/C)
+                        amount_str = line[10:]  # Skip date part
+                        amount = self.parse_amount(amount_str)
+                        
+                        # Get reference - handle both formats
+                        ref = ''
+                        if 'NTRFNONREF//' in line:
+                            # PLN format - reference is after the second amount
+                            parts = line.split('//')
+                            if len(parts) > 1:
+                                ref = parts[-1].strip()
+                        elif 'NERRNONREF//' in line:
+                            # USD format - reference is between // and next space
+                            parts = line.split('//')
+                            if len(parts) > 1:
+                                ref = parts[1].split()[0].strip()
+                        elif '//' in line:
+                            # Generic format
+                            ref = line.split('//')[-1].strip()
+                        
+                        current_transaction = {
+                            'Date': datetime.strptime(date_str, '%y%m%d'),
+                            'Amount': amount,
+                            'Currency': currency or 'Unknown',
+                            'Bank Reference': ref
+                        }
+                    except Exception as e:
+                        print(f"Warning: Error parsing transaction line: {line}")
+                        print(f"Error details: {str(e)}")
+                        continue
+                
+                elif line.startswith(description_start):
+                    continue
+                
+                elif current_transaction:
+                    # Process description lines more efficiently
+                    if line.startswith('<'):
+                        marker = line[:3]
+                        if marker in desc_markers:
+                            description.append(line[3:].strip())
+                    else:
+                        description.append(line.strip())
+            
+            # Add the last transaction
+            if current_transaction:
+                current_transaction['Description'] = ' '.join(description)
                 transactions.append(current_transaction)
+            
+            if not transactions:
+                raise Exception("No transactions found in the file")
+            
+            return transactions
         
-        return transactions
+        except Exception as e:
+            raise Exception(f"Error parsing MT940 file: {str(e)}")
 
 def main():
     root = tk.Tk()
