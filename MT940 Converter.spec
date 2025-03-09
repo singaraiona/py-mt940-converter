@@ -1,9 +1,9 @@
 # -*- mode: python ; coding: utf-8 -*-
 from PyInstaller.utils.hooks import collect_all
 
-datas = [('README.md', '.')]
+datas = [('README.md', '.'), ('requirements.txt', '.'), ('f.mt940', '.'), ('conv.py', '.')]
 binaries = []
-hiddenimports = []
+hiddenimports = ['tkinter', 'PIL', 'PIL._tkinter_finder', 'pandas']
 tmp_ret = collect_all('pandas')
 datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
 tmp_ret = collect_all('pillow')
@@ -56,5 +56,5 @@ app = BUNDLE(
     coll,
     name='MT940 Converter.app',
     icon='icon.icns',
-    bundle_identifier='com.mt940converter',
+    bundle_identifier=None,
 )

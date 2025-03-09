@@ -41,7 +41,7 @@ fi
 
 # Clean previous builds
 echo "Cleaning previous builds..."
-rm -rf build dist venv
+rm -rf build dist
 rm -f *.spec
 
 # Create and activate virtual environment
@@ -52,6 +52,7 @@ source venv/bin/activate
 # Install Python requirements
 echo "Installing Python requirements..."
 python3 -m pip install --upgrade pip
+python3 -m pip install --upgrade pyinstaller
 python3 -m pip install --upgrade -r requirements.txt
 
 # Check if icon file exists and create it if needed
@@ -66,20 +67,23 @@ python3 -m PyInstaller \
     --name "MT940 Converter" \
     --windowed \
     --add-data "README.md:." \
+    --add-data "requirements.txt:." \
+    --add-data "f.mt940:." \
+    --add-data "conv.py:." \
     --icon "icon.icns" \
     --clean \
     --noconfirm \
+    --hidden-import tkinter \
+    --hidden-import PIL \
+    --hidden-import PIL._tkinter_finder \
+    --hidden-import pandas \
     --collect-all pandas \
     --collect-all pillow \
-    --osx-bundle-identifier "com.mt940converter" \
     mt940_converter.py
 
 # Create a more user-friendly app bundle
 cd dist
 mv "MT940 Converter.app" "MT940_Converter.app"
-
-# Set proper permissions
-chmod -R 755 "MT940_Converter.app"
 
 # Create a zip file
 zip -r "MT940_Converter_Mac.zip" "MT940_Converter.app"
@@ -87,4 +91,7 @@ zip -r "MT940_Converter_Mac.zip" "MT940_Converter.app"
 # Deactivate virtual environment
 deactivate
 
-echo "Build complete! The application bundle is in dist/MT940_Converter_Mac.zip" 
+echo "Build complete! The application bundle is in dist/MT940_Converter_Mac.zip"
+echo "To use on another Mac:"
+echo "1. Unzip MT940_Converter_Mac.zip"
+echo "2. Right-click on MT940_Converter.app and select Open" 
