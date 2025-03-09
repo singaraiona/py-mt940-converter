@@ -12,8 +12,12 @@ class MT940Converter:
         self.root.title("MT940 Statement Viewer")
         self.root.geometry("1000x600")
         
-        # Initialize file path
+        # Initialize file path and state flags
         self.loaded_file_path = None
+        self.is_closing = False
+        
+        # Bind window closing event
+        self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
         
         # Configure style
         self.root.configure(bg='#f0f0f0')
@@ -176,18 +180,49 @@ class MT940Converter:
         )
         version_label.pack(side='bottom', pady=(20, 0))
 
+    def on_closing(self):
+        """Handle window closing event"""
+        try:
+            self.is_closing = True
+            self.root.quit()
+            self.root.destroy()
+        except Exception:
+            # If there's any error during closing, force destroy
+            try:
+                self.root.destroy()
+            except Exception:
+                pass
+
     def update_ui(self, message, progress):
         """Helper method to update UI and ensure updates are processed"""
+        if self.is_closing:
+            return
+            
         try:
-            self.status_label.configure(text=message)
+            # Force update the status label
+            if message:
+                self.status_label.configure(text=message)
+                self.status_label.update()
+            
+            # Force update the progress bar
             self.progress_var.set(progress)
-            self.root.update_idletasks()
-            self.root.after(10)
-            self.root.update()
+            self.progress_bar.update()
+            
+            # Force a complete UI refresh
+            if not self.is_closing:
+                self.root.update_idletasks()
+                self.root.update()
+            
+            # Add a small delay to ensure updates are processed
+            if not self.is_closing:
+                self.root.after(100)
+            
         except Exception as e:
-            print(f"Warning: Error updating UI: {str(e)}")
+            if not self.is_closing:
+                print(f"Warning: Error updating UI: {str(e)}")
 
     def load_file(self):
+        """Load and validate the MT940 file"""
         file_path = filedialog.askopenfilename(
             title="Select MT940 File",
             filetypes=[("STA files", "*.sta"), ("All files", "*.*")]
@@ -196,44 +231,81 @@ class MT940Converter:
         if file_path:
             try:
                 # Reset UI state
-                self.update_ui("", 0)
                 self.tree.delete(*self.tree.get_children())
-                self.total_label.config(text="")
+                self.total_label.configure(text="")
+                self.status_label.configure(text="")
+                self.progress_var.set(0)
+                
+                # Force UI update
+                self.root.update_idletasks()
+                self.root.update()
                 
                 # Verify file exists and is readable
                 if not os.path.exists(file_path):
                     raise Exception("Selected file does not exist")
+                
+                # Test file reading
+                with open(file_path, 'r', encoding='iso-8859-1') as f:
+                    f.readline()
                     
                 # Set new file and update UI
                 self.loaded_file_path = file_path
                 self.update_ui(f"File loaded: {os.path.basename(file_path)}", 25)
                 
-                # Enable both buttons
+                # Enable buttons with forced update
                 self.show_button.configure(state='normal')
+                self.show_button.update()
+                
                 self.convert_button.configure(state='normal')
+                self.convert_button.update()
+                
+                # Final UI refresh
                 self.root.update_idletasks()
+                self.root.update()
                 
             except Exception as e:
-                self.update_ui(f"Error loading file: {str(e)}", 0)
-                messagebox.showerror("Error", f"Failed to load file: {str(e)}")
+                error_msg = f"Failed to load file: {str(e)}"
+                self.status_label.configure(text=error_msg)
+                self.status_label.update()
+                
+                messagebox.showerror("Error", error_msg)
+                
+                # Disable buttons with forced update
                 self.show_button.configure(state='disabled')
+                self.show_button.update()
+                
                 self.convert_button.configure(state='disabled')
+                self.convert_button.update()
+                
                 self.loaded_file_path = None
+                
+                # Final UI refresh
+                self.root.update_idletasks()
+                self.root.update()
 
     def show_transactions(self):
+        """Display transactions in the treeview"""
         if not self.loaded_file_path:
             messagebox.showerror("Error", "Please load a file first")
             return
             
         try:
+            if self.is_closing:
+                return
+                
             self.update_ui("Reading file...", 10)
             
             # Clear existing items
-            self.tree.delete(*self.tree.get_children())
+            if not self.is_closing:
+                self.tree.delete(*self.tree.get_children())
+                self.tree.update()
             
             # Parse the file
             transactions = self.parse_mt940(self.loaded_file_path)
             
+            if self.is_closing:
+                return
+                
             self.update_ui("Displaying transactions...", 75)
             
             # Add transactions to treeview
@@ -241,6 +313,9 @@ class MT940Converter:
             currency = None
             
             for trans in transactions:
+                if self.is_closing:
+                    return
+                    
                 # Format date
                 date_str = trans['Date'].strftime('%Y-%m-%d')
                 
@@ -253,18 +328,26 @@ class MT940Converter:
                     currency = trans['Currency']
                 
                 # Insert into treeview
-                self.tree.insert('', 'end', values=(
-                    date_str,
-                    f"{amount:,.2f}",
-                    trans['Currency'],
-                    trans['Bank Reference'],
-                    trans['Description']
-                ))
+                if not self.is_closing:
+                    self.tree.insert('', 'end', values=(
+                        date_str,
+                        f"{amount:,.2f}",
+                        trans['Currency'],
+                        trans['Bank Reference'],
+                        trans['Description']
+                    ))
+                
+                # Force treeview update periodically
+                if not self.is_closing and len(self.tree.get_children()) % 10 == 0:
+                    self.tree.update()
             
-            # Update summary
-            self.total_label.config(
-                text=f"Total Transactions: {len(transactions)} | Total Amount: {total_amount:,.2f} {currency}"
-            )
+            if self.is_closing:
+                return
+                
+            # Update summary with forced refresh
+            summary_text = f"Total Transactions: {len(transactions)} | Total Amount: {total_amount:,.2f} {currency}"
+            self.total_label.configure(text=summary_text)
+            self.total_label.update()
             
             self.update_ui(
                 f"Successfully displayed {len(transactions)} transactions.",
@@ -272,9 +355,14 @@ class MT940Converter:
             )
             
         except Exception as e:
-            self.update_ui(f"Error: {str(e)}", 0)
-            messagebox.showerror("Error", f"Failed to display transactions: {str(e)}")
-            self.show_button.config(state='disabled')
+            if not self.is_closing:
+                error_msg = f"Failed to display transactions: {str(e)}"
+                self.status_label.configure(text=error_msg)
+                self.status_label.update()
+                
+                messagebox.showerror("Error", error_msg)
+                self.show_button.configure(state='disabled')
+                self.show_button.update()
 
     def convert_file(self):
         """Convert the loaded file to CSV"""
@@ -283,11 +371,17 @@ class MT940Converter:
             return
             
         try:
+            if self.is_closing:
+                return
+                
             self.update_ui("Reading file...", 10)
             
             # Parse the file
             transactions = self.parse_mt940(self.loaded_file_path)
             
+            if self.is_closing:
+                return
+                
             self.update_ui("Creating CSV file...", 75)
             
             # Create output filename
@@ -299,15 +393,26 @@ class MT940Converter:
             df['Amount'] = pd.to_numeric(df['Amount']).round(2)
             df.to_csv(output_path, index=False)
             
-            self.update_ui(
-                f"Success! Converted {len(transactions)} transactions.\nOutput saved to: {os.path.basename(output_path)}",
-                100
-            )
-            messagebox.showinfo("Success", f"File converted successfully!\nSaved to: {os.path.basename(output_path)}")
+            if self.is_closing:
+                return
+                
+            success_msg = f"Success! Converted {len(transactions)} transactions.\nOutput saved to: {os.path.basename(output_path)}"
+            self.status_label.configure(text=success_msg)
+            self.status_label.update()
+            
+            self.progress_var.set(100)
+            self.progress_bar.update()
+            
+            if not self.is_closing:
+                messagebox.showinfo("Success", f"File converted successfully!\nSaved to: {os.path.basename(output_path)}")
             
         except Exception as e:
-            self.update_ui(f"Error: {str(e)}", 0)
-            messagebox.showerror("Error", f"Failed to convert file: {str(e)}")
+            if not self.is_closing:
+                error_msg = f"Failed to convert file: {str(e)}"
+                self.status_label.configure(text=error_msg)
+                self.status_label.update()
+                
+                messagebox.showerror("Error", error_msg)
 
     def extract_currency(self, line):
         """Extract currency from balance field"""
