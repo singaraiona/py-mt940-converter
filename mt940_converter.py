@@ -11,6 +11,9 @@ class MT940Converter:
         self.root.title("MT940 to CSV Converter")
         self.root.geometry("600x400")
         
+        # Initialize file path
+        self.loaded_file_path = None
+        
         # Configure style
         self.root.configure(bg='#f0f0f0')
         
@@ -32,9 +35,10 @@ class MT940Converter:
         This tool converts MT940 bank statement files (.sta) to CSV format.
         
         Steps:
-        1. Click 'Select File' to choose your .sta file
-        2. The output CSV will be created in the same folder
-        3. The CSV will contain: Date, Amount, Currency, Bank Reference, and Description
+        1. Click 'Load File' to choose your .sta file
+        2. Click 'Convert' to create the CSV file
+        3. The output CSV will be created in the same folder
+        4. The CSV will contain: Date, Amount, Currency, Bank Reference, and Description
         """
         
         instructions_label = tk.Label(
@@ -46,18 +50,36 @@ class MT940Converter:
         )
         instructions_label.pack(pady=(0, 20))
         
-        # File selection button
-        self.select_button = tk.Button(
-            main_frame,
-            text="Select .sta File",
-            command=self.select_file,
+        # Button frame
+        button_frame = tk.Frame(main_frame, bg='#f0f0f0')
+        button_frame.pack(pady=10)
+        
+        # Load button
+        self.load_button = tk.Button(
+            button_frame,
+            text="Load .sta File",
+            command=self.load_file,
             font=('Helvetica', 12),
             bg='#4CAF50',
             fg='white',
             padx=20,
             pady=10
         )
-        self.select_button.pack(pady=10)
+        self.load_button.pack(side='left', padx=10)
+        
+        # Convert button (initially disabled)
+        self.convert_button = tk.Button(
+            button_frame,
+            text="Convert to CSV",
+            command=self.convert_file,
+            font=('Helvetica', 12),
+            bg='#2196F3',
+            fg='white',
+            padx=20,
+            pady=10,
+            state='disabled'
+        )
+        self.convert_button.pack(side='left', padx=10)
         
         # Status label
         self.status_label = tk.Label(
@@ -87,39 +109,54 @@ class MT940Converter:
         )
         version_label.pack(side='bottom', pady=(20, 0))
 
-    def select_file(self):
+    def load_file(self):
         file_path = filedialog.askopenfilename(
             title="Select MT940 File",
             filetypes=[("STA files", "*.sta"), ("All files", "*.*")]
         )
         
         if file_path:
-            try:
-                self.status_label.config(text="Converting file...")
-                self.progress_var.set(0)
-                self.root.update()
-                
-                # Convert the file
-                transactions = self.parse_mt940(file_path)
-                
-                # Create output filename
-                output_path = os.path.splitext(file_path)[0] + '.csv'
-                
-                # Convert to DataFrame and save
-                df = pd.DataFrame(transactions)
-                df['Date'] = df['Date'].dt.strftime('%Y-%m-%d')
-                df['Amount'] = df['Amount'].round(2)
-                df.to_csv(output_path, index=False)
-                
-                self.progress_var.set(100)
-                self.status_label.config(
-                    text=f"Success! Converted {len(transactions)} transactions.\nOutput saved to: {output_path}"
-                )
-                messagebox.showinfo("Success", "File converted successfully!")
-                
-            except Exception as e:
-                self.status_label.config(text=f"Error: {str(e)}")
-                messagebox.showerror("Error", f"Failed to convert file: {str(e)}")
+            self.loaded_file_path = file_path
+            self.status_label.config(text=f"File loaded: {file_path}")
+            self.convert_button.config(state='normal')
+            self.progress_var.set(50)
+
+    def convert_file(self):
+        if not self.loaded_file_path:
+            messagebox.showerror("Error", "Please load a file first")
+            return
+            
+        try:
+            self.status_label.config(text="Converting file...")
+            self.progress_var.set(75)
+            self.root.update()
+            
+            # Convert the file
+            transactions = self.parse_mt940(self.loaded_file_path)
+            
+            # Create output filename
+            output_path = os.path.splitext(self.loaded_file_path)[0] + '.csv'
+            
+            # Convert to DataFrame and save
+            df = pd.DataFrame(transactions)
+            df['Date'] = df['Date'].dt.strftime('%Y-%m-%d')
+            df['Amount'] = df['Amount'].round(2)
+            df.to_csv(output_path, index=False)
+            
+            self.progress_var.set(100)
+            self.status_label.config(
+                text=f"Success! Converted {len(transactions)} transactions.\nOutput saved to: {output_path}"
+            )
+            messagebox.showinfo("Success", "File converted successfully!")
+            
+            # Reset state
+            self.loaded_file_path = None
+            self.convert_button.config(state='disabled')
+            
+        except Exception as e:
+            self.status_label.config(text=f"Error: {str(e)}")
+            messagebox.showerror("Error", f"Failed to convert file: {str(e)}")
+            self.progress_var.set(0)
 
     def clean_description(self, desc):
         desc = desc.replace('<', ' ').replace('>', ' ')
