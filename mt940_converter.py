@@ -116,10 +116,16 @@ class MT940Converter:
         )
         
         if file_path:
+            # Reset UI state
+            self.progress_var.set(0)
+            self.status_label.config(text="")
+            self.root.update()
+            
+            # Set new file and update UI
             self.loaded_file_path = file_path
-            self.status_label.config(text=f"File loaded: {file_path}")
+            self.status_label.config(text=f"File loaded: {os.path.basename(file_path)}")
             self.convert_button.config(state='normal')
-            self.progress_var.set(50)
+            self.progress_var.set(25)  # Show some progress to indicate file is loaded
 
     def convert_file(self):
         if not self.loaded_file_path:
@@ -128,7 +134,7 @@ class MT940Converter:
             
         try:
             self.status_label.config(text="Converting file...")
-            self.progress_var.set(75)
+            self.progress_var.set(50)
             self.root.update()
             
             # Convert the file
@@ -145,7 +151,7 @@ class MT940Converter:
             
             self.progress_var.set(100)
             self.status_label.config(
-                text=f"Success! Converted {len(transactions)} transactions.\nOutput saved to: {output_path}"
+                text=f"Success! Converted {len(transactions)} transactions.\nOutput saved to: {os.path.basename(output_path)}"
             )
             messagebox.showinfo("Success", "File converted successfully!")
             
@@ -157,6 +163,7 @@ class MT940Converter:
             self.status_label.config(text=f"Error: {str(e)}")
             messagebox.showerror("Error", f"Failed to convert file: {str(e)}")
             self.progress_var.set(0)
+            self.convert_button.config(state='disabled')
 
     def clean_description(self, desc):
         desc = desc.replace('<', ' ').replace('>', ' ')
