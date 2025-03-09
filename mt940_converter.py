@@ -112,10 +112,16 @@ class MT940Converter:
 
     def update_ui(self, message, progress):
         """Helper method to update UI and ensure updates are processed"""
-        self.status_label.config(text=message)
-        self.progress_var.set(progress)
-        self.root.update_idletasks()
-        self.root.update()
+        try:
+            self.status_label.configure(text=message)
+            self.progress_var.set(progress)
+            self.root.update_idletasks()
+            
+            # Give time for UI to process updates
+            self.root.after(10)
+            self.root.update()
+        except Exception as e:
+            print(f"Warning: Error updating UI: {str(e)}")
 
     def load_file(self):
         file_path = filedialog.askopenfilename(
@@ -124,13 +130,27 @@ class MT940Converter:
         )
         
         if file_path:
-            # Reset UI state
-            self.update_ui("", 0)
-            
-            # Set new file and update UI
-            self.loaded_file_path = file_path
-            self.update_ui(f"File loaded: {os.path.basename(file_path)}", 25)
-            self.convert_button.config(state='normal')
+            try:
+                # Reset UI state
+                self.update_ui("", 0)
+                
+                # Verify file exists and is readable
+                if not os.path.exists(file_path):
+                    raise Exception("Selected file does not exist")
+                    
+                # Set new file and update UI
+                self.loaded_file_path = file_path
+                self.update_ui(f"File loaded: {os.path.basename(file_path)}", 25)
+                
+                # Force enable convert button
+                self.convert_button.configure(state='normal')
+                self.root.update_idletasks()
+                
+            except Exception as e:
+                self.update_ui(f"Error loading file: {str(e)}", 0)
+                messagebox.showerror("Error", f"Failed to load file: {str(e)}")
+                self.convert_button.configure(state='disabled')
+                self.loaded_file_path = None
 
     def convert_file(self):
         if not self.loaded_file_path:
